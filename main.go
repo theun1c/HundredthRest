@@ -36,7 +36,9 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 	httpRequestBoby, err := io.ReadAll(r.Body)
 
 	if err != nil {
-		fmt.Println("Failed to read HTTP boby", err)
+		msg := "Failed to read HTTP body: " + err.Error()
+		fmt.Println(msg)
+		w.Write([]byte(msg))
 		return
 	}
 
@@ -44,8 +46,9 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 	amount, err := strconv.Atoi(httpRequestBobyStr)
 
 	if err != nil {
-		fmt.Println("strconv error", err)
-		return
+		msg := "Request convertation failed: " + err.Error()
+		fmt.Println(msg)
+		w.Write([]byte(msg))
 	}
 
 	// тот самый блок с возможной гонкой данных на переменной маней
@@ -53,7 +56,13 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 	mtx.Lock()
 	if money-amount >= 0 {
 		money -= amount
-		fmt.Println("Succsessfuly payment, now money is: ", money)
+		msg := "Succsessfuly payment, now money is: " + strconv.Itoa(money)
+		fmt.Println(msg)
+		_, err = w.Write([]byte(msg))
+
+		if err != nil {
+			fmt.Println("Failed to write HTTP response: ", err)
+		}
 	}
 	mtx.Unlock()
 }
@@ -62,7 +71,9 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	httpRequestBody, err := io.ReadAll(r.Body)
 
 	if err != nil {
-		fmt.Println("Error while reading body", err)
+		msg := "Failed to read HTTP body " + err.Error()
+		fmt.Println(msg)
+		w.Write([]byte(msg))
 		return
 	}
 
@@ -71,7 +82,9 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	saveAmount, err := strconv.Atoi(httpRequestBodyStr)
 
 	if err != nil {
-		fmt.Println("Failed to convert", err)
+		msg := "Request convertation failed: " + err.Error()
+		fmt.Println(msg)
+		w.Write([]byte(msg))
 		return
 	}
 
@@ -83,6 +96,13 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Now bank is: ", bank)
 		money -= saveAmount
 		fmt.Println("Now money is: ", money)
+		_, err = w.Write([]byte("Succsessfuly save money"))
+
+		msg := "Failed to write HTTP response " + err.Error()
+		if err != nil {
+			fmt.Println(msg)
+			w.Write([]byte(msg))
+		}
 	}
 	mtx.Unlock()
 }
