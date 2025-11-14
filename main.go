@@ -1,142 +1,105 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strconv"
 	"sync"
+	"time"
+
+	"github.com/k0kubun/pp"
 )
 
-// не нужно использовать атомик, поскольку секция с возможной
-// гонкой данных обрабатывается мьютексом
-var money int = 1000 // денег в кармане
-
-// с банком тоже самое
-var bank int = 0 // денег в копилке
-
-// создаем мьютекс для критической секции
-// в которой 2 разных горутины (хендлера)
-// работают с одним атомиком маней. *уже не атомиком. я убрал атомики
-//
-// при одновременном входе в блоки с обработкой этой переменной
-// может случиться гонка данных, поскольку 2 горутины
-// не знают друг про друга и работают с 1 переменной
-var mtx = sync.Mutex{}
-
-// когда вызывается хендлер - он вызывается в отдельной горутине
-// а это означает, что нам необходимо обеспечить контроль данных,
-// с которыми будет осуществляться работа.
-// мы работаем с глобальной переменной, а значит
-// money -= amount может привести к гонке данных
-// поэтому следует использовать либо mtx либо atomic
-//
-// если выбор стоит между атомиками и мьютексами, то лучше всего использовать атомики
-func payHandler(w http.ResponseWriter, r *http.Request) {
-
-	for k, v := range r.Header {
-		fmt.Println("k: ", k, " v: ", v)
-	}
-
-	httpRequestBoby, err := io.ReadAll(r.Body)
-
-	if err != nil {
-		// возвращаем статус код 500 - так как ошибка на сервере
-		w.WriteHeader(http.StatusInternalServerError)
-
-		msg := "Failed to read HTTP body: " + err.Error()
-		fmt.Println(msg)
-		w.Write([]byte(msg))
-		return
-	}
-
-	httpRequestBobyStr := string(httpRequestBoby)
-	amount, err := strconv.Atoi(httpRequestBobyStr)
-
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) // 400
-
-		msg := "Request convertation failed: " + err.Error()
-		fmt.Println(msg)
-		w.Write([]byte(msg))
-		return
-	}
-
-	// тот самый блок с возможной гонкой данных на переменной маней
-	// обращение из 2х независимых горутин к 1 переменной
-	mtx.Lock()
-	if money-amount >= 0 {
-		money -= amount
-		msg := "Succsessfuly payment, now money is: " + strconv.Itoa(money)
-		fmt.Println(msg)
-		_, err = w.Write([]byte(msg))
-
-		if err != nil {
-			fmt.Println("Failed to write HTTP response: ", err)
-			return
-		}
-	}
-	mtx.Unlock()
+type Payment struct {
+	Title    string  `json:"title"`
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+	Time     time.Time
 }
 
-func saveHandler(w http.ResponseWriter, r *http.Request) {
-	httpRequestBody, err := io.ReadAll(r.Body)
+type PaymentResponse struct {
+	Money   float64   `json:"money"`
+	History []Payment `json:"history"`
+}
 
-	if err != nil {
-		// 500
+var money float64 = 1000
+var history = make([]Payment, 0)
+var mtx = sync.Mutex{}
+
+func payHandler(w http.ResponseWriter, r *http.Request) {
+	var payment Payment
+	if err := json.NewDecoder(r.Body).Decode(&payment); err != nil {
+		fmt.Println("Error while reading body: ", err)
 		w.WriteHeader(http.StatusInternalServerError)
-
-		msg := "Failed to read HTTP body " + err.Error()
-		fmt.Println(msg)
-		w.Write([]byte(msg))
 		return
 	}
 
-	// преобразуем слайс байт в строку
-	httpRequestBodyStr := string(httpRequestBody)
-	saveAmount, err := strconv.Atoi(httpRequestBodyStr)
+	// нижнюю проверку и анмаршал можно заменить 1 строчкой сверху =)
+
+	// httpRequestBody, err := io.ReadAll(r.Body)
+
+	// if err != nil {
+	// 	fmt.Println("Error while reading body: ", err)
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+	//
+	// if err := json.Unmarshal(httpRequestBody, &payment); err != nil {
+	// 	fmt.Println("Error while reading json: ", err)
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+
+	payment.Time = time.Now()
+
+	mtx.Lock()
+	if money-float64(payment.Amount) >= 0 {
+		money -= float64(payment.Amount)
+	} else {
+		fmt.Println("Not enougth money, needed: ", payment.Amount, " money now: ", money)
+	}
+
+	history = append(history, payment)
+
+	pp.Println(history)
+	fmt.Println("money: ", money)
+
+	httpResponse := PaymentResponse{
+		Money:   money,
+		History: history,
+	}
+
+	b, err := json.Marshal(httpResponse)
 
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest) // 400
-
-		msg := "Request convertation failed: " + err.Error()
-		fmt.Println(msg)
-		w.Write([]byte(msg))
+		fmt.Println("Error marshaling struct: ", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// тут тоже самое что и функции выше
-	// см. описание мьютекса и зачем он тут нужен
-	mtx.Lock()
-	if saveAmount > 0 && money >= saveAmount {
-		bank += saveAmount
-		fmt.Println("Now bank is: ", bank)
-		money -= saveAmount
-		fmt.Println("Now money is: ", money)
-		_, err = w.Write([]byte("Succsessfuly save money"))
-
-		msg := "Failed to write HTTP response " + err.Error()
-		if err != nil {
-			fmt.Println(msg)
-			w.Write([]byte(msg))
-			return
-		}
+	// записываем ответ
+	if _, err := w.Write(b); err != nil {
+		fmt.Println("Error while write response: ", err)
+		return
 	}
+
 	mtx.Unlock()
+
 }
 
 func main() {
-
-	// w.WriteHeader - вызывается до записи ответа в w.Write
-	// по умолчанию имеет статус 200,
-	// но если перед ним записывать w.WriteHeader то поменяется на нужный.
-
-	// headers хедеры нужны для передачи какой-либо служебной информации
-	// или же для передачи токенов в http запросах
-	// их можно добавить в том же постмане
-
 	http.HandleFunc("/pay", payHandler)
-	http.HandleFunc("/save", saveHandler)
 
-	http.ListenAndServe(":8080", nil)
+	// err := http.ListenAndServe(":8080", nil)
+
+	// вариант 1
+	// if err != nil {
+	// 	fmt.Println("Error while starting server: ", err)
+	// }
+
+	// вариант 2 - более крутая запись
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		fmt.Println("Error while starting server: ", err)
+	}
+
 }
