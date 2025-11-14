@@ -36,6 +36,9 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 	httpRequestBoby, err := io.ReadAll(r.Body)
 
 	if err != nil {
+		// возвращаем статус код 500 - так как ошибка на сервере
+		w.WriteHeader(http.StatusInternalServerError)
+
 		msg := "Failed to read HTTP body: " + err.Error()
 		fmt.Println(msg)
 		w.Write([]byte(msg))
@@ -46,9 +49,12 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 	amount, err := strconv.Atoi(httpRequestBobyStr)
 
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest) // 400
+
 		msg := "Request convertation failed: " + err.Error()
 		fmt.Println(msg)
 		w.Write([]byte(msg))
+		return
 	}
 
 	// тот самый блок с возможной гонкой данных на переменной маней
@@ -62,6 +68,7 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			fmt.Println("Failed to write HTTP response: ", err)
+			return
 		}
 	}
 	mtx.Unlock()
@@ -71,6 +78,9 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	httpRequestBody, err := io.ReadAll(r.Body)
 
 	if err != nil {
+		// 500
+		w.WriteHeader(http.StatusInternalServerError)
+
 		msg := "Failed to read HTTP body " + err.Error()
 		fmt.Println(msg)
 		w.Write([]byte(msg))
@@ -82,6 +92,8 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	saveAmount, err := strconv.Atoi(httpRequestBodyStr)
 
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest) // 400
+
 		msg := "Request convertation failed: " + err.Error()
 		fmt.Println(msg)
 		w.Write([]byte(msg))
@@ -102,12 +114,18 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Println(msg)
 			w.Write([]byte(msg))
+			return
 		}
 	}
 	mtx.Unlock()
 }
 
 func main() {
+
+	// w.WriteHeader - вызывается до записи ответа в w.Write
+	// по умолчанию имеет статус 200,
+	// но если перед ним записывать w.WriteHeader то поменяется на нужный.
+
 	http.HandleFunc("/pay", payHandler)
 	http.HandleFunc("/save", saveHandler)
 
