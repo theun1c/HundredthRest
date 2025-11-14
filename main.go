@@ -27,6 +27,13 @@ var history = make([]Payment, 0)
 var mtx = sync.Mutex{}
 
 func payHandler(w http.ResponseWriter, r *http.Request) {
+
+	fooParam := r.URL.Query().Get("foo")
+	booParam := r.URL.Query().Get("boo")
+
+	fmt.Println("foo: ", fooParam)
+	fmt.Println("boo: ", booParam)
+
 	var payment Payment
 	if err := json.NewDecoder(r.Body).Decode(&payment); err != nil {
 		fmt.Println("Error while reading body: ", err)
