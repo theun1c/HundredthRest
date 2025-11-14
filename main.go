@@ -33,6 +33,11 @@ var mtx = sync.Mutex{}
 //
 // если выбор стоит между атомиками и мьютексами, то лучше всего использовать атомики
 func payHandler(w http.ResponseWriter, r *http.Request) {
+
+	for k, v := range r.Header {
+		fmt.Println("k: ", k, " v: ", v)
+	}
+
 	httpRequestBoby, err := io.ReadAll(r.Body)
 
 	if err != nil {
@@ -125,6 +130,10 @@ func main() {
 	// w.WriteHeader - вызывается до записи ответа в w.Write
 	// по умолчанию имеет статус 200,
 	// но если перед ним записывать w.WriteHeader то поменяется на нужный.
+
+	// headers хедеры нужны для передачи какой-либо служебной информации
+	// или же для передачи токенов в http запросах
+	// их можно добавить в том же постмане
 
 	http.HandleFunc("/pay", payHandler)
 	http.HandleFunc("/save", saveHandler)
