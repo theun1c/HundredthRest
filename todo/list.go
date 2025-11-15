@@ -57,7 +57,7 @@ func (l *List) DeleteTask(title string) error {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 
-	if _, ok := l.tasks[title]; ok {
+	if _, ok := l.tasks[title]; !ok {
 		return ErrTaskNotFound
 	}
 
@@ -66,14 +66,14 @@ func (l *List) DeleteTask(title string) error {
 	return nil
 }
 
-func (l *List) CompleteTask(title string) error {
+func (l *List) CompleteTask(title string) (Task, error) {
 
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 
 	task, ok := l.tasks[title]
 	if !ok {
-		return ErrTaskNotFound
+		return Task{}, ErrTaskNotFound
 	}
 
 	// можео сделать и так, но следует придерживаться
@@ -88,7 +88,7 @@ func (l *List) CompleteTask(title string) error {
 
 	l.tasks[title] = task
 
-	return nil
+	return task, nil
 }
 
 // нужно обратить внимание!
@@ -136,18 +136,18 @@ func (l *List) GetTask(title string) (Task, error) {
 
 }
 
-func (l *List) UncompleteTask(title string) error {
+func (l *List) UncompleteTask(title string) (Task, error) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 
 	task, ok := l.tasks[title]
 	if !ok {
-		return ErrTaskNotFound
+		return Task{}, ErrTaskNotFound
 	}
 
 	task.Uncomplete()
 
 	l.tasks[title] = task
 
-	return nil
+	return task, nil
 }
