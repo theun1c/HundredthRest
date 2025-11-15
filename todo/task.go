@@ -27,3 +27,8 @@ func (t *Task) Complete() {
 	t.IsDone = true
 	t.CompletedAt = &now
 }
+
+func (t *Task) Uncomplete() {
+	t.IsDone = false
+	t.CompletedAt = nil
+}

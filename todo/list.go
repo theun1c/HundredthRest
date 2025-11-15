@@ -1,9 +1,10 @@
 package todo
 
-import ()
+import "sync"
 
 type List struct {
 	tasks map[string]Task
+	mtx   sync.RWMutex
 }
 
 func NewList() *List {
@@ -40,6 +41,8 @@ func (l *List) AddTast(task Task) error {
 	// если такая задача существует "по названию"
 	// то создаем новую с именет "тайтл + дата сейчас"
 	// иначе просто создаем задачу, добавляя таск в мапу
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
 
 	if _, ok := l.tasks[task.Title]; ok {
 		return ErrTaskAlreadyExist
@@ -51,6 +54,8 @@ func (l *List) AddTast(task Task) error {
 }
 
 func (l *List) DeleteTask(title string) error {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
 
 	if _, ok := l.tasks[title]; ok {
 		return ErrTaskNotFound
@@ -61,7 +66,11 @@ func (l *List) DeleteTask(title string) error {
 	return nil
 }
 
-func (l *List) ConpleteTask(title string) error {
+func (l *List) CompleteTask(title string) error {
+
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+
 	task, ok := l.tasks[title]
 	if !ok {
 		return ErrTaskNotFound
@@ -87,6 +96,9 @@ func (l *List) ConpleteTask(title string) error {
 //
 // нужно нагуглить проблему
 func (l *List) GetTasks() map[string]Task {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+
 	tmp := make(map[string]Task, len(l.tasks))
 
 	for k, v := range l.tasks {
@@ -97,6 +109,9 @@ func (l *List) GetTasks() map[string]Task {
 }
 
 func (l *List) ListNotCompletedTasks() map[string]Task {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+
 	notCompletedTasks := make(map[string]Task)
 
 	for k, v := range l.tasks {
@@ -106,4 +121,33 @@ func (l *List) ListNotCompletedTasks() map[string]Task {
 	}
 
 	return notCompletedTasks
+}
+
+func (l *List) GetTask(title string) (Task, error) {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+
+	task, ok := l.tasks[title]
+	if !ok {
+		return Task{}, ErrTaskNotFound
+	}
+
+	return task, nil
+
+}
+
+func (l *List) UncompleteTask(title string) error {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+
+	task, ok := l.tasks[title]
+	if !ok {
+		return ErrTaskNotFound
+	}
+
+	task.Uncomplete()
+
+	l.tasks[title] = task
+
+	return nil
 }

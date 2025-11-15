@@ -23,9 +23,20 @@ func (t *TaskDTO) ValidateOnCreate() error {
 	return nil
 }
 
+type CompleteTaskDTO struct {
+	Complete bool
+}
+
 type ErrorDTO struct {
 	Message string
 	Time    time.Time
+}
+
+func NewErrorDTO(message string) *ErrorDTO {
+	return &ErrorDTO{
+		Message: message,
+		Time:    time.Now(),
+	}
 }
 
 func (e *ErrorDTO) ToString() string {
